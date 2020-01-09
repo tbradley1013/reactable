@@ -104,3 +104,98 @@ updateReactable <- function(outputId, selected = NULL, expanded = NULL, page = N
     session$sendCustomMessage(sprintf("__reactable__%s", outputId), newState)
   }
 }
+
+#' Get the state of a reactable instance
+#'
+#' `getReactableState()` gets the state of a reactable instance within a Shiny application.
+#'
+#' @param outputId The Shiny output ID of the `reactable` instance.
+#' @param name Name of a state value to get. One of `"page"`, `"pageSize"`,
+#'   `"pages"`, or `"selected"`. If unspecified, all values will be returned
+#'   in a list.
+#' @param session The Shiny session object. Defaults to the current Shiny session.
+#' @return If `name` is specified, one of the following values:
+#'   - `page`: the current page
+#'   - `pageSize`: the page size
+#'   - `pages`: the number of pages
+#'   - `selected`: the selected rows - a numeric vector of row indices, or `NULL` if no rows are selected
+#'
+#'  If `name` is unspecified, a named list containing all values.
+#'
+#' @examples
+#' # Run in an interactive R session
+#' if (interactive()) {
+#'
+#' library(shiny)
+#' library(reactable)
+#'
+#' ui <- fluidPage(
+#'   actionButton("prev_page_btn", "Previous page"),
+#'   actionButton("next_page_btn", "Next page"),
+#'   reactableOutput("table"),
+#'   verbatimTextOutput("table_state")
+#' )
+#'
+#' server <- function(input, output) {
+#'   output$table <- renderReactable({
+#'     reactable(
+#'       iris,
+#'       showPageSizeOptions = TRUE,
+#'       selection = "multiple"
+#'     )
+#'   })
+#'
+#'   output$table_state <- renderPrint({
+#'     print(getReactableState("table"))
+#'   })
+#'
+#'   observeEvent(input$prev_page_btn, {
+#'     # Change to the previous page
+#'     page <- getReactableState("table", "page")
+#'     req(page >= 1)
+#'     updateReactable("table", page = page - 1)
+#'   })
+#'
+#'   observeEvent(input$next_page_btn, {
+#'     # Change to the next page
+#'     updateReactable("table", page = getReactableState("table", "page") + 1)
+#'   })
+#' }
+#'
+#' shinyApp(ui, server)
+#' }
+#'
+#' @export
+getReactableState <- function(outputId, name = NULL, session = NULL) {
+  if (is.null(session)) {
+    if (requireNamespace("shiny", quietly = TRUE)) {
+      session <- shiny::getDefaultReactiveDomain()
+    }
+    if (is.null(session)) {
+      # Not in an active Shiny session
+      return(NULL)
+    }
+  }
+  if (!is.character(outputId)) {
+    stop("`outputId` must be a character string")
+  }
+
+  props <- c("page", "pageSize", "pages", "selected")
+  if (!is.null(name)) {
+    if (!is.character(name) || !name %in% props) {
+      stop(paste("`name` must be one of", paste(dQuote(props), collapse = ", ")))
+    }
+    if (length(name) == 1) {
+      return(session$input[[sprintf("__reactable__%s__%s", outputId, name)]])
+    } else {
+      props <- name
+    }
+  }
+
+  stats::setNames(
+    lapply(props, function(prop) {
+      session$input[[sprintf("__reactable__%s__%s", outputId, prop)]]
+    }),
+    props
+  )
+}
